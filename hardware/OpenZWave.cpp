@@ -35,24 +35,6 @@ extern std::string szWWWFolder;
 //Note!, Some devices uses the same instance for multiple values,
 //to solve this we are going to use the Index value!, Except for COMMAND_CLASS_MULTI_INSTANCE
 
-//Scale ID's
-enum _eSensorScaleID
-{
-	SCALEID_UNUSED = 0,
-	SCALEID_ENERGY,
-	SCALEID_POWER,
-	SCALEID_VOLTAGE,
-	SCALEID_CURRENT,
-	SCALEID_POWERFACTOR,
-	SCALEID_GAS,
-	SCALEID_CO2,
-	SCALEID_WATER,
-	SCALEID_MOISTRUE,
-	SCALEID_TANK_CAPACITY,
-	SCALEID_RAIN_RATE,
-	SCALEID_SEISMIC_INTENSITY,
-};
-
 struct _tAlarmNameToIndexMapping
 {
 	std::string sLabel;
@@ -1584,10 +1566,10 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 	OpenZWave::ValueID::ValueType vType = vID.GetType();
 	OpenZWave::ValueID::ValueGenre vGenre = vID.GetGenre();
 	std::string vLabel = m_pManager->GetValueLabel(vID);
+	std::string vUnits = m_pManager->GetValueUnits(vID);
 
 	if (commandclass == COMMAND_CLASS_CONFIGURATION)
 	{
-		std::string vUnits = m_pManager->GetValueUnits(vID);
 #ifdef _DEBUG
 		_log.Log(LOG_STATUS, "OpenZWave: Value_Added: Node: %d (0x%02x), CommandClass: %s, Label: %s, Instance: %d, Index: %d, Id: 0x%llX", static_cast<int>(NodeID), static_cast<int>(NodeID), cclassStr(commandclass), vLabel.c_str(), vOrgInstance, vOrgIndex, vID.GetId());
 #else
@@ -1626,7 +1608,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 
 	uint8_t instance = GetInstanceFromValueID(vID);
 
-	std::string vUnits = m_pManager->GetValueUnits(vID);
 	_log.Log(LOG_NORM, "OpenZWave: Value_Added: Node: %d (0x%02x), CommandClass: %s, Label: %s, Instance: %d, Index: %d", static_cast<int>(NodeID), static_cast<int>(NodeID), cclassStr(commandclass), vLabel.c_str(), vOrgInstance, vOrgIndex);
 
 	if ((instance == 0) && (NodeID == m_controllerID))
@@ -1634,19 +1615,18 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 
 	_tZWaveDevice _device;
 	_device.nodeID = NodeID;
-	_device.commandClassID = commandclass;
-	_device.scaleID = -1;
 	_device.instanceID = instance;
-	_device.indexID = 0;
+	_device.indexID = vIndex;
+	_device.commandClassID = commandclass;
+
+	_device.label = vLabel;
+
 	_device.hasWakeup = m_pManager->IsNodeAwake(HomeID, NodeID);
 	_device.isListening = m_pManager->IsNodeListeningDevice(HomeID, NodeID);
 
 	_device.Manufacturer_id = pNodeInfo->Manufacturer_id;
 	_device.Product_id = pNodeInfo->Product_id;
 	_device.Product_type = pNodeInfo->Product_type;
-
-	if (!vLabel.empty())
-		_device.label = vLabel;
 
 	float fValue = 0;
 	int iValue = 0;
@@ -1833,10 +1813,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 			{
 				if (m_pManager->GetValueAsFloat(vID, &fValue) == true)
 				{
-					if (vLabel.find("Energy") != std::string::npos)
-						_device.scaleID = SCALEID_ENERGY;
-					else
-						_device.scaleID = SCALEID_POWER;
 					_device.scaleMultiply = 1;
 					if ((vUnits == "kWh") || (vUnits == "kVAh"))
 					{
@@ -1865,7 +1841,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_VOLTAGE;
 					_device.devType = ZDTYPE_SENSOR_VOLTAGE;
 					InsertDevice(_device);
 				}
@@ -1884,7 +1859,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_CURRENT;
 					_device.devType = ZDTYPE_SENSOR_AMPERE;
 					InsertDevice(_device);
 				}
@@ -1903,7 +1877,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_POWERFACTOR;
 					_device.devType = ZDTYPE_SENSOR_PERCENTAGE;
 					InsertDevice(_device);
 				}
@@ -1922,7 +1895,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_GAS;
 					_device.devType = ZDTYPE_SENSOR_GAS;
 					InsertDevice(_device);
 				}
@@ -1941,7 +1913,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_WATER;
 					_device.devType = ZDTYPE_SENSOR_WATER;
 					InsertDevice(_device);
 				}
@@ -2122,7 +2093,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 			{
 				if (m_pManager->GetValueAsFloat(vID, &fValue) == true)
 				{
-					_device.scaleID = SCALEID_POWER;
 					_device.scaleMultiply = 1;
 					if ((vUnits == "kWh") || (vUnits == "kVAh"))
 					{
@@ -2151,7 +2121,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_VOLTAGE;
 					_device.devType = ZDTYPE_SENSOR_VOLTAGE;
 					InsertDevice(_device);
 				}
@@ -2170,7 +2139,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_CURRENT;
 					_device.devType = ZDTYPE_SENSOR_AMPERE;
 					InsertDevice(_device);
 				}
@@ -2189,7 +2157,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_WATER;
 					_device.devType = ZDTYPE_SENSOR_WATER;
 					InsertDevice(_device);
 				}
@@ -2208,7 +2175,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_CO2;
 					_device.devType = ZDTYPE_SENSOR_CO2;
 					InsertDevice(_device);
 				}
@@ -2227,7 +2193,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_MOISTRUE;
 					_device.devType = ZDTYPE_SENSOR_MOISTURE;
 					InsertDevice(_device);
 				}
@@ -2246,7 +2211,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_TANK_CAPACITY;
 					_device.devType = ZDTYPE_SENSOR_TANK_CAPACITY;
 					InsertDevice(_device);
 				}
@@ -2283,7 +2247,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_RAIN_RATE;
 					_device.devType = ZDTYPE_SENSOR_CUSTOM;
 					_device.custom_label = "mm/h";
 					InsertDevice(_device);
@@ -2303,7 +2266,6 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 				{
 					_device.floatValue = fValue;
 					_device.scaleMultiply = 1;
-					_device.scaleID = SCALEID_SEISMIC_INTENSITY;
 					_device.devType = ZDTYPE_SENSOR_PERCENTAGE;
 					InsertDevice(_device);
 				}
@@ -2582,6 +2544,20 @@ void COpenZWave::AddValue(const OpenZWave::ValueID& vID, const NodeInfo* pNodeIn
 		_device.intvalue = intValue;
 		InsertDevice(_device);
 	}
+	else if (commandclass == COMMAND_CLASS_INDICATOR)
+	{
+		//Ignored
+		if (vType == OpenZWave::ValueID::ValueType_Byte)
+		{
+			if (m_pManager->GetValueAsByte(vID, &byteValue) == false)
+				return;
+		}
+		else
+		{
+			_log.Log(LOG_ERROR, "OpenZWave: Unhandled value type: %d, %s:%d", vType, std::string(__MYFUNCTION__).substr(std::string(__MYFUNCTION__).find_last_of("/\\") + 1).c_str(), __LINE__);
+			return;
+		}
+	}
 	else
 	{
 		//Unhandled
@@ -2686,6 +2662,7 @@ void COpenZWave::UpdateValue(const OpenZWave::ValueID& vID)
 	uint8_t NodeID = vID.GetNodeId();
 
 	uint8_t instance = GetInstanceFromValueID(vID);
+	uint16_t index = vID.GetIndex();
 
 	uint8_t vOrgInstance = vID.GetInstance();
 	uint16_t vOrgIndex = vID.GetIndex();
@@ -2778,6 +2755,8 @@ void COpenZWave::UpdateValue(const OpenZWave::ValueID& vID)
 		)
 		return;
 
+	time_t atime = mytime(NULL);
+
 	if ((commandclass == COMMAND_CLASS_ALARM) || (commandclass == COMMAND_CLASS_SENSOR_ALARM))
 	{
 		instance = GetIndexFromAlarm(vLabel);
@@ -2785,56 +2764,23 @@ void COpenZWave::UpdateValue(const OpenZWave::ValueID& vID)
 			return;
 	}
 
-	time_t atime = mytime(NULL);
 	std::stringstream sstr;
-	sstr << int(NodeID) << ".instances." << int(instance) << ".commandClasses." << int(commandclass) << ".data";
-
-	if (
-		(vLabel.find("Energy") != std::string::npos) ||
-		(vLabel.find("Power") != std::string::npos) ||
-		(vLabel.find("Voltage") != std::string::npos) ||
-		(vLabel.find("Current") != std::string::npos) ||
-		(vLabel.find("Power Factor") != std::string::npos) ||
-		(vLabel.find("Gas") != std::string::npos) ||
-		(vLabel.find("CO2 Level") != std::string::npos) ||
-		(vLabel.find("Water") != std::string::npos) ||
-		(vLabel.find("Moisture") != std::string::npos) ||
-		(vLabel.find("Tank Capacity") != std::string::npos)
-		)
-	{
-		int scaleID = 0;
-		if (vLabel.find("Energy") != std::string::npos)
-			scaleID = SCALEID_ENERGY;
-		else if (vLabel.find("Power") != std::string::npos)
-			scaleID = SCALEID_POWER;
-		else if (vLabel.find("Voltage") != std::string::npos)
-			scaleID = SCALEID_VOLTAGE;
-		else if (vLabel.find("Current") != std::string::npos)
-			scaleID = SCALEID_CURRENT;
-		else if (vLabel.find("Power Factor") != std::string::npos)
-			scaleID = SCALEID_POWERFACTOR;
-		else if (vLabel.find("Gas") != std::string::npos)
-			scaleID = SCALEID_GAS;
-		else if (vLabel.find("CO2 Level") != std::string::npos)
-			scaleID = SCALEID_CO2;
-		else if (vLabel.find("Water") != std::string::npos)
-			scaleID = SCALEID_WATER;
-		else if (vLabel.find("Moisture") != std::string::npos)
-			scaleID = SCALEID_MOISTRUE;
-		else if (vLabel.find("Tank Capacity") != std::string::npos)
-			scaleID = SCALEID_TANK_CAPACITY;
-		else if (vLabel.find("Rain Rate") != std::string::npos)
-			scaleID = SCALEID_RAIN_RATE;
-		else if (vLabel.find("Seismic Intensity") != std::string::npos)
-			scaleID = SCALEID_SEISMIC_INTENSITY;
-
-		sstr << "." << scaleID;
-	}
+	sstr << int(NodeID) << ".instance." << int(instance) << ".index." << int(index) << ".commandClasses." << int(commandclass);
 	std::string path = sstr.str();
 
 #ifdef DEBUG_ZWAVE_INT
 	_log.Log(LOG_NORM, "OpenZWave: Value_Changed: Node: %d (0x%02x), CommandClass: %s, Label: %s, Instance: %d, Index: %d", NodeID, NodeID, cclassStr(commandclass), vLabel.c_str(), vID.GetInstance(), vID.GetIndex());
 #endif
+
+	//ignore the following command classes as they are not used in Domoticz at the moment
+	if (
+		(commandclass == COMMAND_CLASS_CLIMATE_CONTROL_SCHEDULE)
+		|| (commandclass == COMMAND_CLASS_CENTRAL_SCENE && vOrgIndex == ValueID_Index_CentralScene::SceneCount)
+		|| (commandclass == COMMAND_CLASS_SCENE_ACTIVATION && vOrgIndex == ValueID_Index_SceneActivation::Duration)
+		)
+	{
+		return;
+	}
 
 	if (commandclass == COMMAND_CLASS_USER_CODE)
 	{
@@ -2993,14 +2939,6 @@ void COpenZWave::UpdateValue(const OpenZWave::ValueID& vID)
 	}
 	if (pDevice == NULL)
 	{
-		//ignore the following command classes as they are not used in Domoticz at the moment
-		if (
-			(commandclass == COMMAND_CLASS_CLIMATE_CONTROL_SCHEDULE)
-			)
-		{
-			return;
-		}
-
 		//New device, let's add it
 		COpenZWave::NodeInfo* pNode = GetNodeInfo(HomeID, NodeID);
 		if (!pNode)
